@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>老婆点餐 💖</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#fff9fb;margin:0;padding:15px;font-family:Arial,sans-serif}
+.container{max-width:500px;margin:0 auto}
+h1{text-align:center;color:#e63946;margin-bottom:20px}
+/* 管理员样式 */
+#showAdmin{background:#7209b7;color:white;border:none;padding:10px 20px;border-radius:8px;width:100%;margin-bottom:15px}
+.admin{background:#f8f0f3;padding:15px;border-radius:10px;margin-bottom:20px;display:none}
+.admin-upload{margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid #ffccd5}
+.admin input,.admin button{width:100%;margin:5px 0;padding:10px;border:1px solid #ddd;border-radius:8px}
+.admin-btn{background:#e63946;color:white;border:none;padding:10px;border-radius:8px;cursor:pointer}
+/* 菜品管理列表 */
+.admin-list{margin-top:15px}
+.admin-list h3{color:#e63946;margin-bottom:10px}
+.dish-item{display:flex;align-items:center;background:white;padding:10px;border-radius:8px;margin-bottom:8px;gap:10px}
+.dish-item img{width:60px;height:60px;border-radius:4px;object-fit:cover}
+.dish-item .info{flex:1}
+.dish-item .actions{display:flex;gap:5px}
+.dish-item button{padding:5px 8px;font-size:12px;margin:0;border-radius:4px}
+.edit-name{background:#4361ee;color:white}
+.edit-img{background:#f77f00;color:white}
+.delete{background:#d62828;color:white}
+/* 菜单样式 */
+.menu{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.dish{background:white;border-radius:10px;overflow:hidden;box-shadow:0 2px 5px #00000010}
+.dish img{width:100%;height:120px;object-fit:cover}
+.dish .name{padding:8px;text-align:center}
+.dish button{width:100%;background:#ff4d6d;border:none;color:white;padding:6px;border:none;border-radius:0}
+/* 订单区域 */
+.orderResult{background:#fff0f3;padding:15px;border-radius:10px;margin-top:20px}
+.orderResult strong{color:#e63946}
+#orderText{margin:10px 0;padding:8px;background:white;border-radius:4px}
+.orderResult button{margin-right:5px;margin-top:5px}
+.copy-btn{background:#38b000;color:white}
+.clear-btn{background:#808080;color:white}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>老婆大人点餐 💖</h1>
+
+  <button id="showAdmin">老公管理后台</button>
+
+  <!-- 管理员区域 -->
+  <div class="admin" id="admin">
+    <!-- 菜品上传 -->
+    <div class="admin-upload">
+      <input type="password" id="pwd" placeholder="密码（默认：loveyou）" style="display:none;">
+      <input type="text" id="dishName" placeholder="菜名">
+      <input type="file" id="dishImg" accept="image/*">
+      <button class="admin-btn" onclick="addDish()">添加菜品</button>
+    </div>
+
+    <!-- 菜品管理列表 -->
+    <div class="admin-list">
+      <h3>已添加菜品（可修改/删除）</h3>
+      <div id="dishList"></div>
+    </div>
+  </div>
+
+  <!-- 点餐菜单 -->
+  <div class="menu" id="menu"></div>
+
+  <!-- 订单区域 -->
+  <div class="orderResult">
+    <strong>当前点餐：</strong>
+    <div id="orderText">还没点~</div>
+    <button class="copy-btn" onclick="copyOrder()">复制订单给老公</button>
+    <button class="clear-btn" onclick="clearOrder()">清空点餐</button>
+  </div>
+</div>
+
+<script>
+// ========== 配置项 ==========
+const ADMIN_PWD = "loveyou" // 管理员密码，可自行修改
+// 初始化数据（本地存储）
+let dishes = JSON.parse(localStorage.getItem("dishes")) || []
+let order = JSON.parse(localStorage.getItem("myOrder")) || []
+
+// ========== 管理员功能 ==========
+// 显示/隐藏管理后台
+document.getElementById("showAdmin").onclick = () => {
+  const adminArea = document.getElementById("admin")
+  if (adminArea.style.display === "block") {
+    adminArea.style.display = "none"
+    return
+  }
+  
+  // 密码验证
+  const inputPwd = prompt("请输入老公专属密码：")
+  if (inputPwd === ADMIN_PWD) {
+    adminArea.style.display = "block"
+    renderDishList() // 显示菜品管理列表
+  } else if (inputPwd !== null) {
+    alert("密码错误啦～")
+  }
+}
+
+// 添加新菜品
+function addDish() {
+  const nameInput = document.getElementById("dishName")
+  const imgInput = document.getElementById("dishImg")
+  
+  const dishName = nameInput.value.trim()
+  const dishFile = imgInput.files[0]
+  
+  // 验证输入
+  if (!dishName) return alert("菜名不能为空哦～")
+  if (!dishFile) return alert("请选择菜品图片～")
+  
+  // 将图片转为Base64格式存储
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    dishes.push({ 
+      name: dishName, 
+      img: e.target.result 
+    })
+    // 保存到本地存储
+    localStorage.setItem("dishes", JSON.stringify(dishes))
+    
+    // 重置表单 + 刷新列表
+    nameInput.value = ""
+    imgInput.value = ""
+    renderMenu()
+    renderDishList()
+    
+    alert(`✅ 菜品【${dishName}】添加成功！`)
+  }
+  reader.readAsDataURL(dishFile)
+}
+
+// 渲染管理员的菜品管理列表（带修改/删除功能）
+function renderDishList() {
+  const dishListEl = document.getElementById("dishList")
+  if (dishes.length === 0) {
+    dishListEl.innerHTML = "<div style='text-align:center; color:#888; padding:10px;'>暂无菜品，添加第一个吧～</div>"
+    return
+  }
+  
+  dishListEl.innerHTML = ""
+  dishes.forEach((dish, index) => {
+    const dishItem = document.createElement("div")
+    dishItem.className = "dish-item"
+    dishItem.innerHTML = `
+      <img src="${dish.img}" alt="${dish.name}">
+      <div class="info">
+        <div>${dish.name}</div>
+      </div>
+      <div class="actions">
+        <button class="edit-name" onclick="editDishName(${index})">改名字</button>
+        <button class="edit-img" onclick="editDishImg(${index})">换图片</button>
+        <button class="delete" onclick="deleteDish(${index})">删除</button>
+      </div>
+    `
+    dishListEl.appendChild(dishItem)
+  })
+}
+
+// 修改菜品名称
+function editDishName(index) {
+  const currentName = dishes[index].name
+  const newName = prompt(`修改【${currentName}】的名称：`, currentName)
+  
+  if (newName === null) return // 取消操作
+  if (newName.trim() === "") return alert("菜名不能为空～")
+  
+  dishes[index].name = newName.trim()
+  localStorage.setItem("dishes", JSON.stringify(dishes))
+  renderMenu()
+  renderDishList()
+  alert(`✅ 菜品名称已改为【${newName}】！`)
+}
+
+// 更换菜品图片
+function editDishImg(index) {
+  const dishName = dishes[index].name
+  // 创建临时文件输入框
+  const input = document.createElement("input")
+  input.type = "file"
+  input.accept = "image/*"
+  
+  input.onchange = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      dishes[index].img = e.target.result
+      localStorage.setItem("dishes", JSON.stringify(dishes))
+      renderMenu()
+      renderDishList()
+      alert(`✅ 【${dishName}】的图片已更换！`)
+    }
+    reader.readAsDataURL(file)
+  }
+  
+  // 触发文件选择
+  input.click()
+}
+
+// 删除菜品
+function deleteDish(index) {
+  const dishName = dishes[index].name
+  const confirmDelete = confirm(`确定要删除菜品【${dishName}】吗？删除后无法恢复哦～`)
+  
+  if (!confirmDelete) return
+  
+  // 删除并保存
+  dishes.splice(index, 1)
+  localStorage.setItem("dishes", JSON.stringify(dishes))
+  renderMenu()
+  renderDishList()
+  alert(`❌ 菜品【${dishName}】已删除！`)
+}
+
+// ========== 点餐功能 ==========
+// 渲染点餐菜单（老婆看到的）
+function renderMenu() {
+  const menuEl = document.getElementById("menu")
+  if (dishes.length === 0) {
+    menuEl.innerHTML = "<div style='text-align:center; width:100%; padding:50px; color:#888;'>老公还没添加菜品哦～</div>"
+    renderOrder()
+    return
+  }
+  
+  menuEl.innerHTML = ""
+  dishes.forEach((dish, index) => {
+    const dishCard = document.createElement("div")
+    dishCard.className = "dish"
+    dishCard.innerHTML = `
+      <img src="${dish.img}" alt="${dish.name}">
+      <div class="name">${dish.name}</div>
+      <button onclick="choose(${index})">我要点这个😋</button>
+    `
+    menuEl.appendChild(dishCard)
+  })
+  renderOrder()
+}
+
+// 选择菜品（点餐）
+function choose(index) {
+  const dishName = dishes[index].name
+  order.push(dishName)
+  localStorage.setItem("myOrder", JSON.stringify(order))
+  renderOrder()
+  alert(`✅ 已点【${dishName}】！`)
+}
+
+// 渲染订单文本
+function renderOrder() {
+  const orderTextEl = document.getElementById("orderText")
+  if (order.length === 0) {
+    orderTextEl.textContent = "还没点～快来选好吃的😜"
+    return
+  }
+  orderTextEl.textContent = order.join("、")
+}
+
+// 复制订单
+function copyOrder() {
+  if (order.length === 0) {
+    return alert("还没点餐哦～先选点好吃的吧～")
+  }
+  
+  const orderText = "老婆点餐：" + order.join("、")
+  // 复制到剪贴板
+  navigator.clipboard.writeText(orderText).then(() => {
+    alert("✅ 订单已复制！快去发给老公吧～")
+  }).catch(() => {
+    // 备用方案：手动选中文本
+    const orderTextEl = document.getElementById("orderText")
+    const range = document.createRange()
+    range.selectNode(orderTextEl)
+    window.getSelection().removeAllRanges()
+    window.getSelection().addRange(range)
+    alert("复制失败，已帮你选中订单文本，手动复制一下吧～")
+  })
+}
+
+// 清空订单
+function clearOrder() {
+  order = []
+  localStorage.setItem("myOrder", JSON.stringify(order))
+  renderOrder()
+  alert("✅ 点餐车已清空！")
+}
+
+// 页面加载时初始化
+window.onload = () => {
+  renderMenu()
+}
+</script>
+</body>
+</html>
