@@ -103,7 +103,7 @@ let order = []   // 点餐列表
 async function loadDishes() {
   try {
     // 请求Gist数据
-    const response = await fetch(`https://api.github.com/gists/f28398a48a714ac98a56a8b708e09e70`, {
+    const response = await fetch("https://api.github.com/gists/f28398a48a714ac98a56a8b708e09e70", {
       headers: {
         "Authorization": `token ${TOKEN}`,
         "Accept": "application/vnd.github.v3+json"
@@ -320,6 +320,7 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
 
 
 
