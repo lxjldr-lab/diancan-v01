@@ -54,6 +54,11 @@ h1{text-align:center;color:#e63946;margin-bottom:20px}
   background:#fff0f3;padding:15px;border-radius:10px;margin-top:20px
 }
 #orderList{margin:10px 0;padding:10px;background:white;border-radius:8px}
+.orderBox button{
+  padding:8px 15px;margin-right:5px;border:none;border-radius:6px;color:white
+}
+.orderBox button:nth-child(3){background:#27ae60}
+.orderBox button:nth-child(4){background:#888}
 </style>
 </head>
 <body>
@@ -64,8 +69,8 @@ h1{text-align:center;color:#e63946;margin-bottom:20px}
 
   <!-- 管理后台 -->
   <div class="admin" id="admin">
-    <input type="text" id="dishName" placeholder="菜名">
-    <input type="file" id="dishImg" accept="image/*">
+    <input type="text" id="dishName" placeholder="请输入菜品名称">
+    <input type="file" id="dishImg" accept="image/*" placeholder="选择菜品图片">
     <button class="addBtn" onclick="addDish()">添加菜品</button>
     <div id="manageList"></div>
   </div>
@@ -76,144 +81,242 @@ h1{text-align:center;color:#e63946;margin-bottom:20px}
   <!-- 点餐结果 -->
   <div class="orderBox">
     <strong>老婆点了：</strong>
-    <div id="orderList"></div>
+    <div id="orderList">暂无点餐</div>
     <button onclick="submitOrder()">提交点餐</button>
-    <button onclick="clearOrder()">清空</button>
+    <button onclick="clearOrder()">清空点餐</button>
   </div>
 </div>
 
 <script>
-// ========= 核心：用 GitHub Gist 做云端同步 =========
-const GIST_ID = "你的GistID"
-const GIST_FILE = "dishes.json"
-const TOKEN = "你的Token"
+// ========= 核心配置：替换成你自己的！ =========
+const GIST_ID = "f28398a48a714ac98a56a8b708e09e70"       // 替换为你的Gist ID（比如：123456abcdef7890）
+const GIST_FILE = "dishes.json"   // 固定值，不用改
+const TOKEN = "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"         // 替换为你的GitHub Token（比如：ghp_8888888888888888）
+const ADMIN_PWD = "65158760"       // 管理员密码，可自行修改
 
-let dishes = []
-let order = []
+// 全局变量
+let dishes = []  // 菜品列表
+let order = []   // 点餐列表
 
-// ========= 菜品同步 =========
+// ========= 云端数据同步核心函数 =========
+// 从Gist加载菜品
 async function loadDishes() {
   try {
-    let res = await fetch(`https://api.github.com/gists/${GIST_ID}`)
-    let data = await res.json()
-    dishes = JSON.parse(data.files[GIST_FILE].content) || []
-  } catch (e) {
-    dishes = []
-  }
-  renderMenu()
-  renderManage()
-}
-
-async function saveDishes() {
-  await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-    method: "PATCH",
-    headers: {
-      "Authorization": `token ${TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      files: {
-        [GIST_FILE]: {
-          content: JSON.stringify(dishes)
-        }
+    // 请求Gist数据
+    const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+      headers: {
+        "Authorization": `token ${TOKEN}`,
+        "Accept": "application/vnd.github.v3+json"
       }
-    })
-  })
+    });
+    
+    if (!response.ok) throw new Error("加载菜品失败");
+    const gistData = await response.json();
+    // 解析菜品数据
+    dishes = JSON.parse(gistData.files[GIST_FILE].content) || [];
+  } catch (error) {
+    console.log("加载失败，使用本地空列表：", error);
+    dishes = [];
+  }
+  // 渲染页面
+  renderMenu();    // 渲染点餐菜单（老婆看）
+  renderManage();  // 渲染管理列表（老公看）
 }
 
-// ========= 管理功能 =========
+// 保存菜品到Gist
+async function saveDishes() {
+  try {
+    const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+      method: "PATCH",
+      headers: {
+        "Authorization": `token ${TOKEN}`,
+        "Content-Type": "application/json",
+        "Accept": "application/vnd.github.v3+json"
+      },
+      body: JSON.stringify({
+        files: {
+          [GIST_FILE]: {
+            content: JSON.stringify(dishes, null, 2)  // 格式化JSON，方便查看
+          }
+        }
+      })
+    });
+    
+    if (!response.ok) throw new Error("保存菜品失败");
+    return true;
+  } catch (error) {
+    console.error("保存失败：", error);
+    alert("同步失败！请检查Gist ID和Token是否正确");
+    return false;
+  }
+}
+
+// ========= 管理员功能 =========
+// 显示/隐藏管理后台
 document.getElementById("adminBtn").onclick = () => {
-  let p = prompt("老公密码：")
-  if (p === "loveyou") {
-    document.getElementById("admin").style.display = "block"
-    loadDishes()
+  const adminPanel = document.getElementById("admin");
+  if (adminPanel.style.display === "block") {
+    adminPanel.style.display = "none";
+    return;
   }
-}
+  // 密码验证
+  const inputPwd = prompt("请输入老公专属密码：");
+  if (inputPwd === ADMIN_PWD) {
+    adminPanel.style.display = "block";
+    loadDishes(); // 加载菜品列表
+  } else if (inputPwd !== null) {
+    alert("密码错误啦～");
+  }
+};
 
+// 添加新菜品
 async function addDish() {
-  let name = document.getElementById("dishName").value
-  let file = document.getElementById("dishImg").files[0]
-  if (!name || !file) return alert("填全！")
+  const nameInput = document.getElementById("dishName");
+  const imgInput = document.getElementById("dishImg");
+  
+  // 验证输入
+  const dishName = nameInput.value.trim();
+  const dishFile = imgInput.files[0];
+  if (!dishName) return alert("菜名不能为空哦～");
+  if (!dishFile) return alert("请选择菜品图片～");
 
-  let reader = new FileReader()
-  reader.onload = async e => {
-    dishes.push({ name, img: e.target.result })
-    await saveDishes()
-    loadDishes()
-    alert("添加成功！")
+  // 转换图片为Base64
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    // 添加新菜品
+    dishes.push({
+      name: dishName,
+      img: e.target.result  // Base64图片地址
+    });
+    // 保存到云端
+    const saveSuccess = await saveDishes();
+    if (saveSuccess) {
+      // 重置表单
+      nameInput.value = "";
+      imgInput.value = "";
+      // 重新加载渲染
+      loadDishes();
+      alert(`✅ 菜品【${dishName}】添加成功！`);
+    }
+  };
+  reader.readAsDataURL(dishFile);
+}
+
+// 修改菜品名称
+async function editDish(index) {
+  const oldName = dishes[index].name;
+  const newName = prompt(`修改【${oldName}】的名称：`, oldName);
+  
+  if (newName === null) return; // 取消操作
+  if (newName.trim() === "") return alert("菜名不能为空～");
+  
+  dishes[index].name = newName.trim();
+  const saveSuccess = await saveDishes();
+  if (saveSuccess) {
+    loadDishes();
+    alert(`✅ 菜品名称改为【${newName}】！`);
   }
-  reader.readAsDataURL(file)
 }
 
-async function editDish(i) {
-  let newName = prompt("新名称：", dishes[i].name)
-  if (newName) {
-    dishes[i].name = newName
-    await saveDishes()
-    loadDishes()
+// 删除菜品
+async function delDish(index) {
+  const dishName = dishes[index].name;
+  if (!confirm(`确定删除【${dishName}】吗？删除后无法恢复～`)) return;
+  
+  dishes.splice(index, 1); // 删除对应菜品
+  const saveSuccess = await saveDishes();
+  if (saveSuccess) {
+    loadDishes();
+    alert(`❌ 菜品【${dishName}】已删除！`);
   }
 }
 
-async function delDish(i) {
-  if (confirm("确定删除？")) {
-    dishes.splice(i, 1)
-    await saveDishes()
-    loadDishes()
-  }
+// ========= 点餐功能 =========
+// 选择菜品（老婆点餐）
+function orderDish(index) {
+  const dishName = dishes[index].name;
+  order.push(dishName);
+  renderOrder(); // 更新点餐列表
+  alert(`✅ 已点【${dishName}】！`);
 }
 
-// ========= 点餐 =========
-function orderDish(i) {
-  order.push(dishes[i].name)
-  renderOrder()
-}
-
+// 渲染点餐列表
 function renderOrder() {
-  document.getElementById("orderList").innerText = order.join("、")
+  const orderEl = document.getElementById("orderList");
+  if (order.length === 0) {
+    orderEl.textContent = "暂无点餐，快来选好吃的😜";
+  } else {
+    orderEl.textContent = order.join("、");
+  }
 }
 
+// 提交点餐
 function submitOrder() {
-  if (order.length === 0) return alert("还没点～")
-  alert("点餐成功！\n" + order.join("、"))
+  if (order.length === 0) return alert("还没点菜品哦～");
+  const orderText = "老婆点餐：\n" + order.join("、");
+  // 复制到剪贴板
+  navigator.clipboard.writeText(orderText).then(() => {
+    alert(`✅ 点餐成功！\n${orderText}\n（已复制到剪贴板，快去发给老公吧～）`);
+    clearOrder(); // 清空点餐
+  }).catch(() => {
+    alert(`✅ 点餐成功！\n${orderText}\n（复制失败，手动发给老公吧～）`);
+  });
 }
 
+// 清空点餐
 function clearOrder() {
-  order = []
-  renderOrder()
+  order = [];
+  renderOrder();
+  alert("✅ 点餐车已清空！");
 }
 
-// ========= 界面渲染 =========
+// ========= 页面渲染 =========
+// 渲染点餐菜单（老婆看到的）
 function renderMenu() {
-  let m = document.getElementById("menu")
-  m.innerHTML = ""
-  dishes.forEach((d, i) => {
-    m.innerHTML += `
+  const menuEl = document.getElementById("menu");
+  if (dishes.length === 0) {
+    menuEl.innerHTML = `<div style="text-align:center; width:100%; padding:50px; color:#888;">老公还没添加菜品哦～</div>`;
+    return;
+  }
+  
+  menuEl.innerHTML = "";
+  dishes.forEach((dish, index) => {
+    menuEl.innerHTML += `
       <div class="dish">
-        <img src="${d.img}">
-        <div class="name">${d.name}</div>
-        <button class="order" onclick="orderDish(${i})">我要点</button>
+        <img src="${dish.img}" alt="${dish.name}">
+        <div class="name">${dish.name}</div>
+        <button class="order" onclick="orderDish(${index})">我要点这个😋</button>
       </div>
-    `
-  })
+    `;
+  });
 }
 
+// 渲染管理列表（老公看到的）
 function renderManage() {
-  let ml = document.getElementById("manageList")
-  ml.innerHTML = ""
-  dishes.forEach((d, i) => {
-    ml.innerHTML += `
+  const manageEl = document.getElementById("manageList");
+  if (dishes.length === 0) {
+    manageEl.innerHTML = `<div style="text-align:center; color:#888; padding:10px;">暂无菜品，添加第一个吧～</div>`;
+    return;
+  }
+  
+  manageEl.innerHTML = "";
+  dishes.forEach((dish, index) => {
+    manageEl.innerHTML += `
       <div class="manageItem">
-        <img src="${d.img}">
-        <div class="info">${d.name}</div>
-        <button class="edit" onclick="editDish(${i})">改</button>
-        <button class="del" onclick="delDish(${i})">删</button>
+        <img src="${dish.img}" alt="${dish.name}">
+        <div class="info">${dish.name}</div>
+        <button class="edit" onclick="editDish(${index})">改名字</button>
+        <button class="del" onclick="delDish(${index})">删除</button>
       </div>
-    `
-  })
+    `;
+  });
 }
 
-// 启动
-loadDishes()
+// 页面加载时初始化
+window.onload = () => {
+  loadDishes(); // 加载菜品
+  renderOrder(); // 初始化点餐列表
+};
 </script>
 </body>
 </html>
